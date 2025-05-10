@@ -303,8 +303,28 @@ async def my_orders_direct_cb(update:Update,context:ContextTypes.DEFAULT_TYPE):
     q=update.callback_query;await q.answer();uid=q.from_user.id;orders=db_operations.get_user_orders_from_db(uid)
     txt=await _(context,"my_orders_title",user_id=uid,default="Orders:")+"\n\n" if orders else await _(context,"no_orders_yet",user_id=uid)
     if orders:
-        for oid,date_str,total_val,status_str,items_str in orders:
-            txt+=await _(context,"order_details_format",user_id=uid,order_id=oid,date=date_str,status=status_str.capitalize(),total=f"{total_val:.2f}",items=items_str.replace(chr(10), ", ") if items_str else "N/A",default="Order...")
+        # Initialize an empty list to hold formatted order strings
+        orders_txt_list = []
+        for oid, date_val, total_val, status_val, items_list in orders:  # Assuming items_list is part of data
+            # Safely format date, defaulting to N/A if date_val is None
+            date_str = date_val.strftime('%Y-%m-%d %H:%M') if date_val else "N/A"
+            # Safely get status, defaulting to N/A
+            status_str = status_val if status_val else "N/A"
+            # Format items list into a string, handling None or empty list
+            items_str = "\n".join([f"- {item[0]} (x{item[1]})" for item in items_list]) if items_list else "N/A"
+            
+            # Construct the detail string for this order using the localization function
+            order_detail_line = await _(context,"order_details_format",user_id=uid,order_id=oid,date=date_str,status=status_str.capitalize(),total=total_val,items=items_str.replace(chr(10), ", ") if items_str else "N/A",default="Order...")
+            orders_txt_list.append(order_detail_line)
+        
+        # Join all formatted order strings. If list is empty, use the "no_orders_yet" message.
+        if orders_txt_list:
+            txt = await _(context,"my_orders_title",user_id=uid,default="Orders:")+"\n\n" + "\n".join(orders_txt_list)
+        else:
+            # This case should ideally not be reached if `orders` is true and loop runs,
+            # but as a fallback if formatting somehow results in an empty list.
+            txt = await _(context, "no_orders_yet", user_id=uid)
+
     kb=[[InlineKeyboardButton(await _(context,"back_to_main_menu_button",user_id=uid),callback_data="main_menu_direct_cb_ender")]]
     await q.edit_message_text(text=txt,reply_markup=InlineKeyboardMarkup(kb))
 
